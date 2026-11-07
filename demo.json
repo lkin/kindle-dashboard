@@ -1,0 +1,13 @@
+{
+  "weather": {
+    "temperature": "19",
+    "condition": "Partly cloudy",
+    "detail": "Tokyo  ·  High 21° / Low 13°"
+  },
+  "events": [
+    {"time": "09:30", "title": "Morning planning"},
+    {"time": "13:00", "title": "Project work"},
+    {"time": "17:00", "title": "Afternoon walk"},
+    {"time": "19:00", "title": "Family dinner"}
+  ]
+}
