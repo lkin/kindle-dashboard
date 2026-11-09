@@ -1,87 +1,54 @@
-#!/usr/bin/env python3
-"""Render a self-contained Kindle Scribe grayscale dashboard from demo JSON."""
-import argparse
-import json
-from datetime import datetime
-from pathlib import Path
-from zoneinfo import ZoneInfo
 from PIL import Image, ImageDraw, ImageFont
+from datetime import datetime
+from zoneinfo import ZoneInfo
+from pathlib import Path
+import argparse, json, glob
+W,H=2480,1860
+im=Image.new('L',(W,H),250); d=ImageDraw.Draw(im)
+ink,muted,rule,card=30,105,205,238
+jp=next(iter(glob.glob('/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc') + glob.glob('/System/Library/Fonts/*角*W3.ttc')), None)
+if not jp: raise RuntimeError('Japanese font missing: install fonts-noto-cjk')
+reg=next(p for p in ['/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf','/System/Library/Fonts/Supplemental/Arial.ttf'] if Path(p).exists())
+bold=next(p for p in ['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf','/System/Library/Fonts/Supplemental/Arial Bold.ttf'] if Path(p).exists())
+serif=next(p for p in ['/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf','/System/Library/Fonts/Supplemental/Georgia.ttf'] if Path(p).exists())
+def f(n,kind='r'): return ImageFont.truetype({'r':reg,'b':bold,'s':serif,'j':jp}[kind],n)
+def text(pos,s,n=42,kind='r',color=ink): d.text(pos,s,font=f(n,kind),fill=color)
+def line(y,x1=105,x2=1370): d.line((x1,y,x2,y),fill=rule,width=3)
+parser=argparse.ArgumentParser()
+parser.add_argument('--data',default='demo.json')
+parser.add_argument('--output',default='site/dashboard.png')
+args=parser.parse_args()
+data=json.loads(Path(args.data).read_text(encoding='utf-8'))
+now=datetime.now(ZoneInfo('Asia/Tokyo'))
+text((105,90),now.strftime('%A, %B %-d'),76,'s')
 
-W, H = 1860, 2480
-BG, INK, MUTED, RULE, CARD = 250, 30, 112, 207, 239
+text((105,340),"TODAY'S AGENDA",42,'b'); text((108,408),'SAMPLE EVENTS',28,'b',muted); line(470)
+for i,(time,title) in enumerate([(e['time'],e['title']) for e in data['events'][:4]]):
+ y=515+i*205; text((110,y),time,48,'b',muted); text((340,y-2),title,60); line(y+140)
+# right weather panel
+x=1450; right=2375
 
+d.rounded_rectangle((x,90,right,710),radius=25,fill=card)
+text((x+48,123),data['weather']['display_temperature'],112,'b'); text((x+51,255),data['weather']['condition'],61)
+text((x+52,339),data['weather']['high_low'],39,color=muted)
+d.line((x+50,415,right-50,415),fill=rule,width=2)
+for i,(t,temp,rain) in enumerate([(v['time'],v['temperature'],v['precipitation']) for v in data['weather']['forecast'][:5]]):
+ xx=x+50+i*166; text((xx,448),t,29,'b',muted); text((xx,505),temp,32,'b'); text((xx,581),rain,34,color=muted)
+text((x+50,655),'PRECIPITATION CHANCE  ·  SAMPLE',24,'b',muted)
+# Japanese practice card
 
-def font(size, bold=False, serif=False):
-    families = (["/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf", "DejaVuSerif.ttf"] if serif
-                else (["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "DejaVuSans-Bold.ttf"] if bold
-                      else ["/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVuSans.ttf"]))
-    for path in families:
-        try:
-            return ImageFont.truetype(path, size)
-        except OSError:
-            pass
-    return ImageFont.load_default()
-
-
-def fit(draw, text, x, y, max_width, size=48, fill=INK, bold=False):
-    current = size
-    while current > 22 and draw.textbbox((0, 0), text, font=font(current, bold))[2] > max_width:
-        current -= 3
-    draw.text((x, y), text, font=font(current, bold), fill=fill)
-
-
-def render(data, output, timestamp):
-    im = Image.new("L", (W, H), BG)
-    d = ImageDraw.Draw(im)
-    left, right = 115, W - 115
-    d.text((left, 90), "FIELD NOTES  /  DAILY DISPLAY", font=font(36, True), fill=MUTED)
-    d.text((right - 365, 90), "KINDLE SCRIBE", font=font(36), fill=MUTED)
-    d.line((left, 161, right, 161), fill=INK, width=5)
-    d.text((left, 230), timestamp.strftime("%A, %B %-d"), font=font(67), fill=INK)
-    d.text((left, 323), timestamp.strftime("%Y"), font=font(64), fill=MUTED)
-    d.text((left, 422), "Your day,", font=font(150, serif=True), fill=INK)
-    d.text((left, 587), "at a glance.", font=font(150, serif=True), fill=INK)
-
-    # Weather and date modules. All values come from the local JSON fixture.
-    d.rounded_rectangle((left, 880, right, 1270), radius=26, fill=CARD)
-    d.text((left+55, 925), "WEATHER  /  DEMONSTRATION", font=font(32, True), fill=MUTED)
-    temp = str(data["weather"]["temperature"])
-    d.text((left+52, 1001), temp + "°", font=font(170), fill=INK)
-    fit(d, data["weather"]["condition"], 650, 1070, 1000, 66, fill=INK)
-    fit(d, data["weather"]["detail"], 650, 1170, 950, 36, fill=MUTED)
-    # Sun illustration.
-    cx, cy, rad = 1470, 1050, 66
-    d.ellipse((cx-rad, cy-rad, cx+rad, cy+rad), outline=INK, width=8)
-    for dx, dy in [(0,-108),(0,108),(-108,0),(108,0),(-78,-78),(-78,78),(78,-78),(78,78)]:
-        length = (dx**2+dy**2)**.5
-        sx, sy = cx+dx*0.83, cy+dy*0.83
-        ex, ey = cx+dx*1.12, cy+dy*1.12
-        d.line((sx,sy,ex,ey), fill=INK, width=7)
-
-    d.text((left, 1375), "TODAY'S AGENDA", font=font(48, True), fill=INK)
-    d.line((left, 1454, right, 1454), fill=RULE, width=3)
-    for idx, event in enumerate(data["events"][:4]):
-        y = 1510 + idx * 153
-        d.text((left+4, y+7), str(event["time"]), font=font(49, True), fill=MUTED)
-        fit(d, str(event["title"]), 385, y+7, right-385, 63, fill=INK)
-        d.line((left, y+115, right, y+115), fill=RULE, width=2)
-
-    d.text((left, 2228), "Small updates. A quieter screen.", font=font(51, serif=True), fill=INK)
-    d.line((left, 2335, right, 2335), fill=INK, width=4)
-    stamp = timestamp.strftime("%Y-%m-%d %H:%M JST")
-    d.text((left, 2364), "SAMPLE DATA  ·  NOT A LIVE FORECAST", font=font(28, True), fill=MUTED)
-    box = d.textbbox((0,0),stamp,font=font(28))
-    d.text((right-(box[2]-box[0]),2364),stamp,font=font(28),fill=MUTED)
-    Path(output).parent.mkdir(parents=True, exist_ok=True)
-    # Grayscale 8-bit, no alpha, non-interlaced. Optimize makes an economical transfer.
-    im.save(output, format="PNG", optimize=True)
-    print(f"rendered {output}: {W}x{H}, {Path(output).stat().st_size:,} bytes")
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--data", default="demo.json")
-    parser.add_argument("--output", default="site/dashboard.png")
-    args = parser.parse_args()
-    data = json.loads(Path(args.data).read_text(encoding="utf-8"))
-    render(data, args.output, datetime.now(ZoneInfo("Asia/Tokyo")))
+d.rounded_rectangle((x,830,right,1452),radius=25,outline=rule,width=3)
+text((x+48,860),data['kanji']['character'],210,'j'); text((x+335,917),data['kanji']['meaning'],52,'b'); text((x+337,1000),data['kanji']['readings'],38,'j',muted)
+d.line((x+50,1150,right-50,1150),fill=rule,width=2)
+for i,(word,reading,meaning) in enumerate([(v['word'],v['reading'],v['meaning']) for v in data['kanji']['examples'][:3]]):
+ y=1185+i*70; text((x+52,y),word,42,'j'); text((x+235,y+6),reading,33,'j',muted); text((x+505,y+6),meaning,34)
+text((105,1405),'SHARED TASKS',42,'b'); text((108,1470),'SAMPLE  ·  NOTION',28,'b',muted); line(1520)
+for i,title in enumerate(data['tasks'][:2]):
+ y=1550+i*78; d.rounded_rectangle((110,y+9,145,y+44),radius=4,outline=muted,width=3); text((175,y),title,40)
+d.line((105,1750,2375,1750),fill=ink,width=3)
+text((105,1780),'SAMPLE DATA  ·  NOT A LIVE FORECAST',27,'b',muted)
+stamp='Generated at '+now.strftime('%Y-%m-%d %H:%M JST'); box=d.textbbox((0,0),stamp,font=f(30)); text((2375-box[2],1778),stamp,30,color=muted)
+# Draw in landscape; rotate only the final image for the Scribe.
+output=Path(args.output)
+output.parent.mkdir(parents=True,exist_ok=True)
+im.transpose(Image.Transpose.ROTATE_270).save(output,optimize=True)

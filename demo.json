@@ -1,13 +1,78 @@
 {
   "weather": {
-    "temperature": "19",
+    "display_temperature": "19°C / 66°F",
     "condition": "Partly cloudy",
-    "detail": "Tokyo  ·  High 21° / Low 13°"
+    "high_low": "High 21°C / 70°F   ·   Low 13°C / 55°F",
+    "forecast": [
+      {
+        "time": "09:00",
+        "temperature": "19°/66°",
+        "precipitation": "10%"
+      },
+      {
+        "time": "12:00",
+        "temperature": "21°/70°",
+        "precipitation": "20%"
+      },
+      {
+        "time": "15:00",
+        "temperature": "20°/68°",
+        "precipitation": "30%"
+      },
+      {
+        "time": "18:00",
+        "temperature": "17°/63°",
+        "precipitation": "10%"
+      },
+      {
+        "time": "21:00",
+        "temperature": "15°/59°",
+        "precipitation": "5%"
+      }
+    ]
   },
   "events": [
-    {"time": "09:30", "title": "Morning planning"},
-    {"time": "13:00", "title": "Project work"},
-    {"time": "17:00", "title": "Afternoon walk"},
-    {"time": "19:00", "title": "Family dinner"}
-  ]
+    {
+      "time": "09:30",
+      "title": "Morning planning"
+    },
+    {
+      "time": "13:00",
+      "title": "Project work"
+    },
+    {
+      "time": "17:00",
+      "title": "Afternoon walk"
+    },
+    {
+      "time": "19:00",
+      "title": "Family dinner"
+    }
+  ],
+  "tasks": [
+    "Plan the week",
+    "Review shared list"
+  ],
+  "kanji": {
+    "character": "学",
+    "meaning": "study · learning",
+    "readings": "ガク  /  まなぶ",
+    "examples": [
+      {
+        "word": "学校",
+        "reading": "がっこう",
+        "meaning": "school"
+      },
+      {
+        "word": "学生",
+        "reading": "がくせい",
+        "meaning": "student"
+      },
+      {
+        "word": "学ぶ",
+        "reading": "まなぶ",
+        "meaning": "to learn"
+      }
+    ]
+  }
 }

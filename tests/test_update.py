@@ -21,6 +21,7 @@ class UpdateTests(unittest.TestCase):
         self.app = self.us / 'kindle-dashboard'
         self.app.mkdir()
         (self.app / 'config.sh').write_text("IMAGE_URL='https://example.com/dashboard.png'\nREDRAW_WHILE_ASLEEP=0\n")
+        (self.app / 'secrets.sh').write_text("READ_TOKEN='" + 'a' * 64 + "'\n")
         tools = self.base / 'tools'
         tools.mkdir()
         curl = tools / 'curl'

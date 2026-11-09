@@ -25,27 +25,40 @@ if [ ! -f "$CONFIG" ]; then log "configuration missing: $CONFIG"; exit 1; fi
 . "$CONFIG"
 IMAGE_URL="${IMAGE_URL:-}"
 REDRAW_WHILE_ASLEEP="${REDRAW_WHILE_ASLEEP:-0}"
+# Store the device credential in a separate local-only file. Never commit it.
+SECRET_FILE="${DASHBOARD_SECRETS:-$BASE/secrets.sh}"
+if [ ! -f "$SECRET_FILE" ]; then
+    log "credentials missing: $SECRET_FILE"
+    exit 1
+fi
+. "$SECRET_FILE"
+READ_TOKEN="${READ_TOKEN:-}"
+# The documented token generation is: openssl rand -hex 32
+case "$READ_TOKEN" in
+    ''|*[!0-9a-fA-F]*) log 'invalid READ_TOKEN: expected 64 hexadecimal characters'; exit 1;;
+esac
+if [ "${#READ_TOKEN}" -ne 64 ]; then
+    log 'invalid READ_TOKEN length: expected 64 hexadecimal characters'
+    exit 1
+fi
 case "$IMAGE_URL" in
     https://* ) ;;
     * ) log 'refused: set an HTTPS IMAGE_URL in config.sh'; exit 1;;
 esac
-case "$IMAGE_URL" in *YOUR-USERNAME*|*YOUR-REPO*) log 'refused: placeholder URL'; exit 1;; esac
+case "$IMAGE_URL" in *YOUR-USERNAME*|*YOUR-REPO*|*YOUR-WORKER*|*YOUR-SUBDOMAIN*) log 'refused: placeholder URL'; exit 1;; esac
 
-# Keep networking bounded: cron must never hold the Kindle awake indefinitely.
-if command -v curl >/dev/null 2>&1; then
-    if ! curl --fail --location --silent --show-error --connect-timeout 8 --max-time 30 \
-        --output "$TMP" "$IMAGE_URL" 2>>"$LOG"; then
-        log 'download failed (network unavailable or HTTP/TLS error); last image kept'
-        exit 0
-    fi
-elif command -v wget >/dev/null 2>&1; then
-    if ! wget -q -T 30 -O "$TMP" "$IMAGE_URL" 2>>"$LOG"; then
-        log 'download failed (wget); last image kept'
-        exit 0
-    fi
-else
-    log 'neither curl nor wget is available'
+# Bound networking. Do not follow redirects or fall back to an
+# unauthenticated downloader. --config - keeps the token out of curl argv.
+if ! command -v curl >/dev/null 2>&1; then
+    log 'curl is required for authenticated HTTPS downloads'
     exit 1
+fi
+if ! printf 'header = "Authorization: Bearer %s"\n' "$READ_TOKEN" | \
+    curl -q --config - --fail --silent --show-error \
+        --connect-timeout 8 --max-time 30 \
+        --output "$TMP" "$IMAGE_URL" 2>>"$LOG"; then
+    log 'download failed (network, authorization or TLS); last image kept'
+    exit 0
 fi
 
 # Minimal PNG validation, no dependencies: signature, dimensions, and size.
