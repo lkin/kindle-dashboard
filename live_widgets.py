@@ -139,8 +139,11 @@ def build(fixture, state, now, lat, lon):
         result['weather'] = {'display_temperature': '—', 'condition': 'Weather unavailable', 'high_low': '', 'forecast': [], 'status': 'No saved forecast'}
     try:
         kanji = state.get('kanji')
-        if not kanji or kanji.get('date') != now.date().isoformat(): kanji = kanji_data(now)
-        print('Kanji: dictionary')
+        if not kanji or kanji.get('date') != now.date().isoformat():
+            kanji = kanji_data(now)
+            print('Kanji: dictionary')
+        else:
+            print('Kanji: saved daily selection')
     except (ValueError, KeyError, IndexError, TypeError, OSError, urllib.error.URLError):
         kanji = state.get('kanji')
         print('Kanji: saved' if kanji else 'Kanji: unavailable')
@@ -150,6 +153,7 @@ def build(fixture, state, now, lat, lon):
 if __name__ == '__main__':
     now = datetime.now(JST)
     state = previous_state(os.environ.get('DASHBOARD_IMAGE_URL'), os.environ.get('DASHBOARD_READ_TOKEN'))
+    print('Private widget state:', 'available' if state else 'not yet available')
     result, state = build(json.loads(Path('demo.json').read_text(encoding='utf-8')), state, now,
                           os.environ.get('WEATHER_LATITUDE'), os.environ.get('WEATHER_LONGITUDE'))
     Path('/tmp/scribe-live-data.json').write_text(json.dumps(result, ensure_ascii=False), encoding='utf-8')
