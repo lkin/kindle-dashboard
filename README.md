@@ -1,6 +1,6 @@
 # Private Kindle Scribe dashboard
 
-GitHub Actions renders a sample grayscale landscape dashboard and writes it to private Cloudflare KV at minute :05 each hour. The Kindle's authenticated client fetches it from a Cloudflare Worker. GitHub Pages is not used. The current weather, kanji, agenda and tasks are sample data, not live integrations.
+GitHub Actions renders a sample grayscale landscape dashboard and writes it to private Cloudflare KV at minute :55 each hour. The Kindle's authenticated client fetches it from a Cloudflare Worker. GitHub Pages is not used. The current weather, kanji, agenda and tasks are sample data, not live integrations.
 
 The renderer draws at 2480 × 1860 in landscape and rotates the finished image to 1860 × 2480 for the Scribe. `demo.json` contains sample data only; `site/dashboard.png` in the repository is an older sample, not the image served by the Worker. Actions renders a fresh image during each run.
 
@@ -12,7 +12,7 @@ The workflow requires the `CF_API_TOKEN` GitHub secret and `CF_ACCOUNT_ID` and `
 
 The Kindle client is `kindle/update.sh`; install it as `/mnt/us/kindle-dashboard/update.sh`. Configure the Worker HTTPS URL and `REDRAW_WHILE_ASLEEP=0` in `/mnt/us/kindle-dashboard/config.sh`. Store only `READ_TOKEN='<64-character hex token>'` in the separate device-only `/mnt/us/kindle-dashboard/secrets.sh`; it must match the Worker's `READ_TOKEN`. This credential is readable by someone with access to the USB storage. Never commit or share it.
 
-The authenticated client uses curl, validates PNG dimensions and size, and preserves the prior image on a failed fetch. Its log is `/mnt/us/kindle-dashboard/update.log`. The KOReader sleep-screen patch runs the client and displays `/mnt/us/screensavers/dashboard.png`. On this device it is configured for 07:15–22:15 local time, after the :05 render. GitHub Actions may run late; in that case the previous image remains until the next fetch. The KOReader patch and its Wi-Fi wake handling are a locally adapted version of [koreader-live-sleepscreen](https://github.com/file99/koreader-live-sleepscreen); the 2022 Scribe remains an independently tested configuration, not an upstream guarantee.
+The authenticated client uses curl, validates PNG dimensions and size, and preserves the prior image on a failed fetch. Its log is `/mnt/us/kindle-dashboard/update.log`. The KOReader sleep-screen patch runs the client and displays `/mnt/us/screensavers/dashboard.png`. On this device it is configured for 07:15–22:15 local time, after the preceding :55 render. GitHub Actions may run late; in that case the previous image remains until the next fetch. The KOReader patch and its Wi-Fi wake handling are a locally adapted version of [koreader-live-sleepscreen](https://github.com/file99/koreader-live-sleepscreen); the 2022 Scribe remains an independently tested configuration, not an upstream guarantee.
 
 The adapted patch source is `kindle/2-live-sleepscreen.lua` (upstream MIT licence in `kindle/LIVE-SLEEPSCREEN-LICENSE.txt`). It starts with downloads disabled unless `/mnt/us/live-sleepscreen.enablefetch` exists; `/mnt/us/live-sleepscreen.nowake` disables scheduled wakes. For testing only, `/mnt/us/live-sleepscreen.fasttest` schedules frequent wakes and should be removed after testing. Restart KOReader after editing the patch.
 
