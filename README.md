@@ -21,3 +21,11 @@ The older KindleCron and Chengandre scripts in this repository are legacy, not r
 ## Local render
 
 Install Pillow from `requirements.txt` and a Japanese font (Ubuntu: `fonts-noto-cjk`), then run `python render.py --data demo.json --output /tmp/dashboard.png`. The script also supports macOS system fonts for previews. Run `python -m unittest discover -s tests` for downloader checks.
+
+## Live weather and Japanese
+
+Actions needs the additional secrets `WEATHER_LATITUDE` and `WEATHER_LONGITUDE` (an approximate location is sufficient), and `DASHBOARD_IMAGE_URL` and `DASHBOARD_READ_TOKEN` for retrieving the previous private image. These values must not be put into source files or logs. The image URL must be HTTPS, with no redirect. The read token is separate from the Cloudflare API upload token.
+
+Open-Meteo provides current and three-hourly forecast data without an API key for non-commercial use; attribution is shown on the dashboard. If it fails, the last successful forecast is recovered from metadata in the private image. After three hours, the display shows when that forecast was saved. If no previous forecast is available, it shows weather unavailable. Only weather and Japanese widget state is stored there; do not add personal events, task details or credentials to this metadata.
+
+The kanji and example words come from kanjiapi.dev and the EDRDG KANJIDIC/JMdict dictionaries. Grades 4–6 and 8 are Jōyō kanji; the 440 characters taught in grades 1–3 are excluded. A date-seeded selection keeps the same character for a day. The previous character is kept if the dictionary API fails. No LLM or preprocessed dataset is needed.

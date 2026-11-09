@@ -34,8 +34,16 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements.txt
 
+      - name: Fetch live widgets using private previous image as fallback
+        env:
+          DASHBOARD_IMAGE_URL: ${{ secrets.DASHBOARD_IMAGE_URL }}
+          DASHBOARD_READ_TOKEN: ${{ secrets.DASHBOARD_READ_TOKEN }}
+          WEATHER_LATITUDE: ${{ secrets.WEATHER_LATITUDE }}
+          WEATHER_LONGITUDE: ${{ secrets.WEATHER_LONGITUDE }}
+        run: python live_widgets.py
+
       - name: Render dashboard
-        run: python render.py --data demo.json --output site/dashboard.png
+        run: python render.py --data /tmp/scribe-live-data.json --state /tmp/scribe-widget-state.json --output site/dashboard.png
 
       - name: Upload dashboard to private Cloudflare KV
         shell: bash
