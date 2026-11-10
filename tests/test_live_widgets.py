@@ -27,6 +27,32 @@ class WidgetTests(unittest.TestCase):
         self.assertEqual(out['weather']['condition'], 'Weather unavailable')
         self.assertEqual(out['kanji']['meaning'], 'Dictionary unavailable')
 
+    @patch('live_widgets.OPENER.open')
+    def test_notion_prioritizes_open_tasks_without_leaking_into_state(self, open_mock):
+        def row(name, status, priority, due):
+            return {'properties': {'Task name': {'title': [{'plain_text': name}]},
+                    'Status': {'status': {'name': status}},
+                    'Priority': {'select': {'name': priority}},
+                    'Due': {'date': {'start': due}}}}
+        payload = {'results': [row('Low', 'Not started', 'Low', '2026-11-09'),
+                    row('Urgent', 'In progress', 'High', '2026-11-15'),
+                    row('Done', 'Done', 'High', '2026-11-01')], 'has_more': False}
+        open_mock.return_value.__enter__.return_value.read.return_value = json.dumps(payload).encode()
+        self.assertEqual(live.notion_tasks('token', 'b94d217e-c3e7-4ea2-a705-6df1674278f8'), ['Urgent', 'Low'])
+
+    @patch('live_widgets.request')
+    @patch('live_widgets.OPENER.open')
+    def test_calendar_combines_and_deduplicates(self, token_open, request):
+        token_open.return_value.__enter__.return_value.read.return_value = b'{"access_token":"token"}'
+        event = {'iCalUID': 'shared', 'start': {'dateTime': '2026-11-09T09:00:00+09:00'}, 'summary': 'Meeting'}
+        request.side_effect = [json.dumps({'items': [event]}).encode(), json.dumps({'items': [event, {
+            'iCalUID': 'other', 'start': {'date': '2026-11-09'}, 'summary': 'Holiday'}]}).encode()]
+        creds = json.dumps({'client_id':'id','client_secret':'secret','refresh_token':'refresh'})
+        result = live.google_events(creds, json.dumps(['a','b']), self.now)
+        self.assertEqual([x['title'] for x in result], ['Holiday','Meeting'])
+        self.assertEqual(result[0]['time'], 'All day')
+        self.assertEqual(request.call_count, 2)
+
     @patch('live_widgets.request')
     def test_private_image_state_round_trip(self, request):
         image = Image.new('L', (1860,2480)); info = PngImagePlugin.PngInfo()

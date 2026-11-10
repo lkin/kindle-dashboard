@@ -26,9 +26,9 @@ data=json.loads(Path(args.data).read_text(encoding='utf-8'))
 now=datetime.now(ZoneInfo('Asia/Tokyo'))
 text((105,90),now.strftime('%A, %B %-d'),76,'s')
 
-text((105,340),"TODAY'S AGENDA",42,'b'); text((108,408),'SAMPLE EVENTS',28,'b',muted); line(470)
+text((105,340),"TODAY'S AGENDA",42,'b'); text((108,408),data.get('events_status','SAMPLE EVENTS'),28,'b',muted); line(470)
 for i,(time,title) in enumerate([(e['time'],e['title']) for e in data['events'][:4]]):
- y=515+i*205; text((110,y),time,48,'b',muted); text((340,y-2),title,60); line(y+140)
+ y=515+i*205; text((110,y),time,48,'b',muted); fit((340,y-2),title,60,1020,'j'); line(y+140)
 # right weather panel
 x=1450; right=2375
 
@@ -46,9 +46,9 @@ text((x+48,860),data['kanji']['character'],210,'j'); fit((x+335,917),data['kanji
 d.line((x+50,1150,right-50,1150),fill=rule,width=2)
 for i,(word,reading,meaning) in enumerate([(v['word'],v['reading'],v['meaning']) for v in data['kanji']['examples'][:3]]):
  y=1185+i*70; text((x+52,y),word,42,'j'); fit((x+235,y+6),reading,33,255,'j',muted); fit((x+505,y+6),meaning,34,355)
-text((105,1405),'SHARED TASKS',42,'b'); text((108,1470),'SAMPLE  ·  NOTION',28,'b',muted); line(1520)
+text((105,1405),'SHARED TASKS',42,'b'); text((108,1470),data.get('tasks_status', 'SAMPLE  ·  NOTION'),28,'b',muted); line(1520)
 for i,title in enumerate(data['tasks'][:2]):
- y=1550+i*78; d.rounded_rectangle((110,y+9,145,y+44),radius=4,outline=muted,width=3); text((175,y),title,40)
+ y=1550+i*78; d.rounded_rectangle((110,y+9,145,y+44),radius=4,outline=muted,width=3); fit((175,y),title,40,1180,'j')
 d.line((105,1750,2375,1750),fill=ink,width=3)
 text((105,1780),'WEATHER: OPEN-METEO  ·  DICTIONARY: EDRDG / KANJIAPI.DEV',27,'b',muted)
 stamp='Generated at '+now.strftime('%Y-%m-%d %H:%M JST'); box=d.textbbox((0,0),stamp,font=f(30)); text((2375-box[2],1778),stamp,30,color=muted)

@@ -121,8 +121,108 @@ def kanji_data(now):
             'readings': ' / '.join((item.get('on_readings', [])[:2] + item.get('kun_readings', [])[:2]))[:28] or '—',
             'examples': selected, 'date': now.date().isoformat()}
 
+def notion_tasks(token, source_id):
+    """Read a bounded set of open tasks without logging the response."""
+    if not token or not source_id:
+        raise ValueError('Notion connection not configured')
+    # Source ID is configured independently of the access token.
+    import uuid
+    source_id = str(uuid.UUID(source_id))
+    url = 'https://api.notion.com/v1/data_sources/' + source_id + '/query'
+    headers = {'Authorization': 'Bearer ' + token, 'Notion-Version': '2025-09-03',
+               'Content-Type': 'application/json', 'User-Agent': 'ScribeDashboard/1.0'}
+    results = []
+    cursor = None
+    for _ in range(3):
+        query = {'page_size': 100, 'filter': {'and': [
+            {'property': 'Status', 'status': {'does_not_equal': 'Done'}},
+            {'property': 'Status', 'status': {'does_not_equal': 'Dropped'}}]}}
+        if cursor: query['start_cursor'] = cursor
+        req = urllib.request.Request(url, data=json.dumps(query).encode(), headers=headers, method='POST')
+        with OPENER.open(req, timeout=TIMEOUT) as response:
+            raw = response.read(2_000_001)
+            if len(raw) > 2_000_000: raise ValueError('Notion response too large')
+            data = json.loads(raw)
+        results.extend(data['results'])
+        if not data.get('has_more'): break
+        cursor = data.get('next_cursor')
+        if not cursor: raise ValueError('Notion pagination missing cursor')
+    if data.get('has_more'): raise ValueError('Notion result limit exceeded')
+    tasks = []
+    for row in results:
+        properties = row.get('properties', {})
+        title = ''.join(item.get('plain_text', '') for item in properties.get('Task name', {}).get('title', [])).strip()
+        if not title: continue
+        status = (properties.get('Status', {}).get('status') or {}).get('name')
+        if status in ('Done', 'Dropped'): continue
+        priority = (properties.get('Priority', {}).get('select') or {}).get('name')
+        due = (properties.get('Due', {}).get('date') or {}).get('start') or '9999-12-31'
+        tasks.append(({'High': 0, 'Medium': 1, 'Low': 2}.get(priority, 3), due, title))
+    tasks.sort(key=lambda item: (item[0], item[1], item[2].casefold()))
+    return [item[2] for item in tasks[:2]]
+
+def google_events(credentials_json, calendar_ids_json, now):
+    """Read today's events using an OAuth refresh token; never log data or URLs."""
+    if not credentials_json or not calendar_ids_json:
+        raise ValueError('Calendar authorization not configured')
+    credentials = json.loads(credentials_json)
+    calendar_ids = json.loads(calendar_ids_json)
+    if not isinstance(calendar_ids, list) or not calendar_ids:
+        raise ValueError('Calendar IDs not configured')
+    token_data = urllib.parse.urlencode({'client_id': credentials['client_id'],
+        'client_secret': credentials['client_secret'], 'refresh_token': credentials['refresh_token'],
+        'grant_type': 'refresh_token'}).encode()
+    token_req = urllib.request.Request('https://oauth2.googleapis.com/token', data=token_data,
+        headers={'Content-Type': 'application/x-www-form-urlencoded'}, method='POST')
+    with OPENER.open(token_req, timeout=TIMEOUT) as response:
+        access_token = json.loads(response.read(100_000))['access_token']
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    events, seen = [], set()
+    for calendar_id in calendar_ids:
+        cursor = None
+        for _ in range(5):
+            params = {'timeMin': start.isoformat(), 'timeMax': end.isoformat(), 'singleEvents': 'true',
+                      'orderBy': 'startTime', 'maxResults': '250',
+                      'fields': 'items(start,end,summary,status,iCalUID,attendees(self,responseStatus)),nextPageToken'}
+            if cursor: params['pageToken'] = cursor
+            url = ('https://www.googleapis.com/calendar/v3/calendars/' +
+                   urllib.parse.quote(calendar_id, safe='') + '/events?' + urllib.parse.urlencode(params))
+            data = json.loads(request(url, {'Authorization': 'Bearer ' + access_token}, limit=2_000_000))
+            for event in data.get('items', []):
+                if event.get('status') == 'cancelled': continue
+                if any(a.get('self') and a.get('responseStatus') == 'declined' for a in event.get('attendees', [])): continue
+                begin = event.get('start', {})
+                instant = begin.get('dateTime') or begin.get('date')
+                if not instant: continue
+                uid = event.get('iCalUID')
+                # Instances of one recurring event share an iCalUID, so include start.
+                key = (uid, instant) if uid else None
+                if key and key in seen: continue
+                if key: seen.add(key)
+                if begin.get('dateTime'):
+                    dt = datetime.fromisoformat(begin['dateTime'].replace('Z', '+00:00')).astimezone(JST)
+                    label = dt.strftime('%H:%M') if dt >= start else 'Ongoing'
+                    sort_key = max(dt, start).isoformat()
+                else:
+                    label, sort_key = 'All day', start.isoformat()
+                events.append((sort_key, label, event.get('summary') or 'Busy'))
+            cursor = data.get('nextPageToken')
+            if not cursor: break
+        if cursor: raise ValueError('Calendar result limit exceeded')
+    events.sort(key=lambda e: (e[0], e[2].casefold()))
+    return [{'time': label, 'title': title} for _, label, title in events[:4]]
+
 def build(fixture, state, now, lat, lon):
     result = dict(fixture)
+    try:
+        result['events'] = google_events(os.environ.get('GOOGLE_CALENDAR_CREDENTIALS'), os.environ.get('GOOGLE_CALENDAR_IDS'), now)
+        result['events_status'] = 'GOOGLE CALENDAR' if result['events'] else 'NO EVENTS TODAY'
+        print('Calendar: events loaded')
+    except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError):
+        result['events'] = []
+        result['events_status'] = 'CALENDAR UNAVAILABLE' if os.environ.get('GOOGLE_CALENDAR_CREDENTIALS') else 'CALENDAR SETUP REQUIRED'
+        print('Calendar: unavailable or not configured')
     prior_weather = state.get('weather')
     try:
         if not lat or not lon: raise ValueError('weather location is not configured')
@@ -148,6 +248,14 @@ def build(fixture, state, now, lat, lon):
         kanji = state.get('kanji')
         print('Kanji: saved' if kanji else 'Kanji: unavailable')
     result['kanji'] = kanji or {'character': '—', 'meaning': 'Dictionary unavailable', 'readings': '', 'examples': []}
+    try:
+        result['tasks'] = notion_tasks(os.environ.get('NOTION_TOKEN'), os.environ.get('NOTION_DATA_SOURCE_ID'))
+        result['tasks_status'] = 'NOTION  ·  OPEN TASKS' if result['tasks'] else 'NO OPEN TASKS'
+        print('Notion: tasks loaded')
+    except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError):
+        result['tasks'] = []
+        result['tasks_status'] = 'NOTION UNAVAILABLE'
+        print('Notion: unavailable')
     return result, {k: v for k, v in [('weather', weather), ('kanji', kanji)] if v}
 
 if __name__ == '__main__':

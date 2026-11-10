@@ -40,6 +40,10 @@ jobs:
           DASHBOARD_READ_TOKEN: ${{ secrets.DASHBOARD_READ_TOKEN }}
           WEATHER_LATITUDE: ${{ secrets.WEATHER_LATITUDE }}
           WEATHER_LONGITUDE: ${{ secrets.WEATHER_LONGITUDE }}
+          GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
+          GOOGLE_CALENDAR_IDS: ${{ secrets.GOOGLE_CALENDAR_IDS }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
         run: python live_widgets.py
 
       - name: Render dashboard
