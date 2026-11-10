@@ -35,10 +35,15 @@ class WidgetTests(unittest.TestCase):
                     'Priority': {'select': {'name': priority}},
                     'Due': {'date': {'start': due}}}}
         payload = {'results': [row('Low', 'Not started', 'Low', '2026-11-09'),
+                    row('Normal later', 'Not started', 'Normal', '2026-11-12'),
+                    row('Normal earlier', 'Not started', 'normal', '2026-11-10'),
+                    row('High later', 'Not started', 'High', '2026-11-20'),
                     row('Urgent', 'In progress', 'High', '2026-11-15'),
+                    row('Other', 'Not started', None, '2026-11-01'),
                     row('Done', 'Done', 'High', '2026-11-01')], 'has_more': False}
         open_mock.return_value.__enter__.return_value.read.return_value = json.dumps(payload).encode()
-        self.assertEqual(live.notion_tasks('token', 'b94d217e-c3e7-4ea2-a705-6df1674278f8'), ['Urgent', 'Low'])
+        self.assertEqual(live.notion_tasks('token', 'b94d217e-c3e7-4ea2-a705-6df1674278f8'),
+                         ['Urgent', 'High later', 'Normal earlier', 'Normal later', 'Low'])
 
     @patch('live_widgets.request')
     @patch('live_widgets.OPENER.open')

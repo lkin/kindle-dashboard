@@ -157,9 +157,9 @@ def notion_tasks(token, source_id):
         if status in ('Done', 'Dropped'): continue
         priority = (properties.get('Priority', {}).get('select') or {}).get('name')
         due = (properties.get('Due', {}).get('date') or {}).get('start') or '9999-12-31'
-        tasks.append(({'High': 0, 'Medium': 1, 'Low': 2}.get(priority, 3), due, title))
+        tasks.append(({'high': 0, 'normal': 1, 'medium': 1, 'low': 2}.get((priority or '').casefold(), 3), due, title))
     tasks.sort(key=lambda item: (item[0], item[1], item[2].casefold()))
-    return [item[2] for item in tasks[:2]]
+    return [item[2] for item in tasks[:5]]
 
 def google_events(credentials_json, calendar_ids_json, now):
     """Read today's events using an OAuth refresh token; never log data or URLs."""
