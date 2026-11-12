@@ -36,6 +36,18 @@ def request(url, headers=None, limit=4_000_000):
 def get_json(url):
     return json.loads(request(url))
 
+def koyomi_data(now):
+    day = now.date().isoformat()
+    query = urllib.parse.urlencode({'mode': 'd', 'cnt': 1, 'targetyyyy': now.year,
+                                    'targetmm': now.month, 'targetdd': now.day})
+    item = get_json('https://koyomi.zingsystem.com/api/?' + query)['datelist'][day]
+    fields = ('inreki', 'eto', 'sekki', 'rokuyou', 'holiday')
+    result = {key: str(item.get(key) or '').strip()[:80] for key in fields}
+    if not result['inreki'] or not result['eto'] or not result['rokuyou']:
+        raise ValueError('incomplete koyomi response')
+    result['date'] = day
+    return result
+
 def previous_state(url, token):
     if not url or not token:
         return {}
@@ -114,7 +126,7 @@ def kanji_data(now):
     for _, _, written, reading, meaning in examples:
         if written in seen: continue
         seen.add(written)
-        selected.append({'word': written, 'reading': reading[:10], 'meaning': meaning[:24]})
+        selected.append({'word': written, 'reading': reading[:10], 'meaning': meaning[:160]})
         if len(selected) == 3: break
     if not selected: raise ValueError('no dictionary examples')
     return {'character': character, 'meaning': ' · '.join(item.get('meanings', [])[:2])[:28] or '—',
@@ -215,6 +227,17 @@ def google_events(credentials_json, calendar_ids_json, now):
 
 def build(fixture, state, now, lat, lon):
     result = dict(fixture)
+    koyomi = state.get('koyomi')
+    if not isinstance(koyomi, dict) or koyomi.get('date') != now.date().isoformat():
+        try:
+            koyomi = koyomi_data(now)
+            print('Koyomi: live')
+        except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError):
+            koyomi = None
+            print('Koyomi: unavailable')
+    else:
+        print('Koyomi: saved daily selection')
+    result['koyomi'] = koyomi
     try:
         result['events'] = google_events(os.environ.get('GOOGLE_CALENDAR_CREDENTIALS'), os.environ.get('GOOGLE_CALENDAR_IDS'), now)
         result['events_status'] = 'GOOGLE CALENDAR' if result['events'] else 'NO EVENTS TODAY'
@@ -256,7 +279,7 @@ def build(fixture, state, now, lat, lon):
         result['tasks'] = []
         result['tasks_status'] = 'NOTION UNAVAILABLE'
         print('Notion: unavailable')
-    return result, {k: v for k, v in [('weather', weather), ('kanji', kanji)] if v}
+    return result, {k: v for k, v in [('weather', weather), ('kanji', kanji), ('koyomi', koyomi)] if v}
 
 if __name__ == '__main__':
     now = datetime.now(JST)

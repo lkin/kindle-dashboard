@@ -11,6 +11,29 @@ class WidgetTests(unittest.TestCase):
         self.now = datetime(2026, 11, 9, 15, 5, tzinfo=live.JST)
         self.weather = {'display_temperature': '19°C / 66°F', 'condition': 'Clear sky', 'high_low': '', 'forecast': [], 'fetched_at': (self.now-timedelta(hours=4)).isoformat()}
         self.kanji = {'character': '学', 'meaning': 'study', 'readings': '', 'examples': [], 'date': '2026-11-09'}
+        self.koyomi_patch = patch('live_widgets.koyomi_data', side_effect=OSError('offline'))
+        self.koyomi_patch.start()
+        self.addCleanup(self.koyomi_patch.stop)
+
+    @patch('live_widgets.get_json')
+    def test_koyomi_date_fields_and_optional_values(self, get_json):
+        get_json.return_value = {'datelist': {'2026-11-09': {'inreki': '霜月', 'eto': '午',
+                            'sekki': '', 'rokuyou': '先勝', 'holiday': None}}}
+        # setUp patches the network-facing function; restore it for this focused test.
+        self.koyomi_patch.stop()
+        result = live.koyomi_data(self.now)
+        self.assertEqual((result['date'], result['inreki'], result['holiday']), ('2026-11-09', '霜月', ''))
+
+    @patch('live_widgets.kanji_data', side_effect=OSError('offline'))
+    @patch('live_widgets.weather_data', side_effect=OSError('offline'))
+    def test_koyomi_cache_only_used_for_matching_date(self, *_):
+        saved = {'date': '2026-11-09', 'inreki': '霜月', 'eto': '午', 'rokuyou': '先勝'}
+        out, state = live.build({}, {'kanji': self.kanji, 'koyomi': saved}, self.now, '1', '2')
+        self.assertEqual(out['koyomi'], saved)
+        self.assertEqual(state['koyomi'], saved)
+        out, state = live.build({}, {'kanji': self.kanji, 'koyomi': saved}, self.now + timedelta(days=1), '1', '2')
+        self.assertIsNone(out['koyomi'])
+        self.assertNotIn('koyomi', state)
 
     @patch('live_widgets.weather_data', side_effect=OSError('offline'))
     def test_stale_weather_and_saved_kanji(self, _):
