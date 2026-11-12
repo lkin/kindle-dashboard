@@ -58,7 +58,6 @@ if koyomi:
 text((105,280),"TODAY'S AGENDA",42,'b')
 if data.get('events_status') in ('CALENDAR UNAVAILABLE', 'CALENDAR SETUP REQUIRED', 'NO EVENTS TODAY'):
  text((108,340),data['events_status'],28,'b',muted)
-line(380)
 for i,(time,title) in enumerate([(e['time'],e['title']) for e in data['events'][:4]]):
  y=410+i*175; text((110,y),time,48,'b',muted); fit((340,y-2),title,60,1020,'j'); line(y+130)
 # right weather panel
@@ -83,12 +82,11 @@ for i,(word,reading,meaning) in enumerate([(v['word'],v['reading'],v['meaning'])
 text((105,1170),'PENDING TASKS',42,'b')
 if data.get('tasks_status') in ('NOTION UNAVAILABLE', 'NO OPEN TASKS'):
  text((108,1235),data['tasks_status'],28,'b',muted)
-line(1285)
 for i,title in enumerate(data['tasks'][:5]):
  y=1315+i*78; d.rounded_rectangle((110,y+9,145,y+44),radius=4,outline=muted,width=3); fit((175,y),title,40,1180,'j')
 d.line((105,1750,2375,1750),fill=ink,width=3)
 text((105,1780),'WEATHER: OPEN-METEO  ·  DICTIONARY: EDRDG / KANJIAPI.DEV  ·  TASKS: NOTION  ·  CALENDAR: GOOGLE',23,'b',muted)
-stamp='Generated at '+now.strftime('%Y-%m-%d %H:%M JST'); box=d.textbbox((0,0),stamp,font=f(30)); text((2375-box[2],1778),stamp,30,color=muted)
+stamp='GENERATED AT '+now.strftime('%Y-%m-%d %H:%M JST'); box=d.textbbox((0,0),stamp,font=f(23,'b')); text((2375-box[2],1780),stamp,23,'b',muted)
 # Draw in landscape; rotate only the final image for the Scribe.
 output=Path(args.output)
 output.parent.mkdir(parents=True,exist_ok=True)
