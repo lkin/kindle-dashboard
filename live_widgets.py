@@ -218,15 +218,85 @@ def google_events(credentials_json, calendar_ids_json, now):
                     sort_key = max(dt, start).isoformat()
                 else:
                     label, sort_key = 'All day', start.isoformat()
-                events.append((sort_key, label, event.get('summary') or 'Busy'))
+                events.append((sort_key, label, event.get('summary') or 'Busy', uid, instant))
             cursor = data.get('nextPageToken')
             if not cursor: break
         if cursor: raise ValueError('Calendar result limit exceeded')
     events.sort(key=lambda e: (e[0], e[2].casefold()))
-    return [{'time': label, 'title': title} for _, label, title in events[:4]]
+    print('Calendar: Google sources loaded:', len(calendar_ids))
+    return [{'time': label, 'title': title, '_sort': order, '_uid': uid,
+             '_start': instant} for order, label, title, uid, instant in events]
+
+def outlook_events(urls_json, now):
+    """Read published ICS feeds. URLs are credentials: never log or cache them."""
+    import icalendar
+    import recurring_ical_events
+    urls = json.loads(urls_json)
+    if not isinstance(urls, list) or not 1 <= len(urls) <= 5:
+        raise ValueError('Expected one to five ICS URLs')
+    start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start + timedelta(days=1)
+    events = []
+    for url in urls:
+        if not isinstance(url, str): raise ValueError('Invalid ICS URL')
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError('ICS requires an HTTPS subscription URL')
+        calendar = icalendar.Calendar.from_ical(request(url, limit=2_000_000))
+        for event in recurring_ical_events.of(calendar).between(start, end):
+            if str(event.get('STATUS', '')).upper() == 'CANCELLED': continue
+            begin = event.decoded('DTSTART')
+            if isinstance(begin, datetime):
+                dt = (begin if begin.tzinfo else begin.replace(tzinfo=JST)).astimezone(JST)
+                instant = dt.isoformat()
+                label = dt.strftime('%H:%M') if dt >= start else 'Ongoing'
+                order = max(dt, start).isoformat()
+            else:
+                instant, label, order = begin.isoformat(), 'All day', start.isoformat()
+            title = str(event.get('SUMMARY', '')).strip() or 'Busy'
+            if str(event.get('CLASS', '')).upper() in ('PRIVATE', 'CONFIDENTIAL'):
+                title = 'Busy'
+            events.append({'time': label, 'title': title, '_sort': order,
+                           '_uid': str(event.get('UID', '')), '_start': instant})
+            if len(events) > 2000: raise ValueError('Too many ICS events')
+    return events
+
+def merge_events(events):
+    """Limit only after combining sources; dedupe UID + normalized occurrence."""
+    seen, result = set(), []
+    for event in sorted(events, key=lambda e: (e['_sort'], e['title'].casefold())):
+        instant = event['_start']
+        if 'T' in instant:
+            instant = datetime.fromisoformat(instant.replace('Z', '+00:00')).astimezone(JST).isoformat()
+        key = (event['_uid'], instant) if event.get('_uid') else None
+        if key and key in seen: continue
+        if key: seen.add(key)
+        result.append({'time': event['time'], 'title': event['title']})
+    return result[:4]
+
+def agenda_data(now):
+    events, failures, loaded = [], 0, 0
+    sources = [(google_events, (os.environ.get('GOOGLE_CALENDAR_CREDENTIALS'),
+                               os.environ.get('GOOGLE_CALENDAR_IDS'), now))]
+    if os.environ.get('OUTLOOK_ICS_URLS'):
+        sources.append((outlook_events, (os.environ['OUTLOOK_ICS_URLS'], now)))
+    for fetch, args in sources:
+        try:
+            events.extend(fetch(*args)); loaded += 1
+        except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError):
+            failures += 1
+    result = merge_events(events)
+    if failures:
+        status = 'SOME CALENDARS UNAVAILABLE' if loaded else 'CALENDAR UNAVAILABLE'
+        print('Calendar: one or more sources unavailable')
+    else:
+        status = 'CALENDAR' if result else 'NO EVENTS TODAY'
+        print('Calendar: events loaded')
+    return result, status
 
 def build(fixture, state, now, lat, lon):
     result = dict(fixture)
+    result['outlook_configured'] = bool(os.environ.get('OUTLOOK_ICS_URLS'))
     koyomi = state.get('koyomi')
     if not isinstance(koyomi, dict) or koyomi.get('date') != now.date().isoformat():
         try:
@@ -238,14 +308,7 @@ def build(fixture, state, now, lat, lon):
     else:
         print('Koyomi: saved daily selection')
     result['koyomi'] = koyomi
-    try:
-        result['events'] = google_events(os.environ.get('GOOGLE_CALENDAR_CREDENTIALS'), os.environ.get('GOOGLE_CALENDAR_IDS'), now)
-        result['events_status'] = 'GOOGLE CALENDAR' if result['events'] else 'NO EVENTS TODAY'
-        print('Calendar: events loaded')
-    except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError):
-        result['events'] = []
-        result['events_status'] = 'CALENDAR UNAVAILABLE' if os.environ.get('GOOGLE_CALENDAR_CREDENTIALS') else 'CALENDAR SETUP REQUIRED'
-        print('Calendar: unavailable or not configured')
+    result['events'], result['events_status'] = agenda_data(now)
     prior_weather = state.get('weather')
     try:
         if not lat or not lon: raise ValueError('weather location is not configured')

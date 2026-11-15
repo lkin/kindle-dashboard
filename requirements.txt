@@ -1,1 +1,3 @@
 Pillow>=11,<13
+icalendar>=6,<8
+recurring-ical-events>=3.8,<4

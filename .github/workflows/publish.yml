@@ -30,7 +30,7 @@ jobs:
 
       - name: Cache Japanese font
         id: japanese-font
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.cache/scribe-fonts/NotoSansCJK-Regular.ttc
           key: noto-cjk-ubuntu-24.04-v1
@@ -54,6 +54,7 @@ jobs:
           WEATHER_LONGITUDE: ${{ secrets.WEATHER_LONGITUDE }}
           GOOGLE_CALENDAR_CREDENTIALS: ${{ secrets.GOOGLE_CALENDAR_CREDENTIALS }}
           GOOGLE_CALENDAR_IDS: ${{ secrets.GOOGLE_CALENDAR_IDS }}
+          OUTLOOK_ICS_URLS: ${{ secrets.OUTLOOK_ICS_URLS }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATA_SOURCE_ID: ${{ secrets.NOTION_DATA_SOURCE_ID }}
         run: python live_widgets.py
