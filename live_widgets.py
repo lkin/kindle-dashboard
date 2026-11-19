@@ -283,8 +283,12 @@ def agenda_data(now):
     for fetch, args in sources:
         try:
             events.extend(fetch(*args)); loaded += 1
-        except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError):
+        except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError) as error:
             failures += 1
+            # Exception text can contain a private feed URL; emit safe categories only.
+            category = ('HTTP ' + str(error.code) if isinstance(error, urllib.error.HTTPError)
+                        else type(error).__name__)
+            print('Calendar source unavailable:', fetch.__name__, category)
     result = merge_events(events)
     if failures:
         status = 'SOME CALENDARS UNAVAILABLE' if loaded else 'CALENDAR UNAVAILABLE'
