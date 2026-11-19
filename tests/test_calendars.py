@@ -107,6 +107,12 @@ END:VCALENDAR
             with self.assertRaises(ValueError): live.outlook_events(value, self.now)
         request.assert_not_called()
 
+    @patch('live_widgets.request')
+    def test_plain_subscription_url_is_accepted(self, request):
+        request.return_value = b'BEGIN:VCALENDAR\r\nVERSION:2.0\r\nEND:VCALENDAR\r\n'
+        self.assertEqual(live.outlook_events('https://example.test/feed.ics\n', self.now), [])
+        self.assertEqual(request.call_args.args[0], 'https://example.test/feed.ics')
+
 
 if __name__ == '__main__':
     unittest.main()

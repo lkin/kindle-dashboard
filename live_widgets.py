@@ -231,7 +231,12 @@ def outlook_events(urls_json, now):
     """Read published ICS feeds. URLs are credentials: never log or cache them."""
     import icalendar
     import recurring_ical_events
-    urls = json.loads(urls_json)
+    raw = urls_json.strip()
+    if raw.startswith('https://'):
+        urls = [line.strip() for line in raw.splitlines() if line.strip()]
+    else:
+        urls = json.loads(raw)
+        if isinstance(urls, str): urls = [urls]
     if not isinstance(urls, list) or not 1 <= len(urls) <= 5:
         raise ValueError('Expected one to five ICS URLs')
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -276,11 +281,11 @@ def merge_events(events):
 
 def agenda_data(now):
     events, failures, loaded = [], 0, 0
-    sources = [(google_events, (os.environ.get('GOOGLE_CALENDAR_CREDENTIALS'),
+    sources = [('google_events', google_events, (os.environ.get('GOOGLE_CALENDAR_CREDENTIALS'),
                                os.environ.get('GOOGLE_CALENDAR_IDS'), now))]
     if os.environ.get('OUTLOOK_ICS_URLS'):
-        sources.append((outlook_events, (os.environ['OUTLOOK_ICS_URLS'], now)))
-    for fetch, args in sources:
+        sources.append(('outlook_events', outlook_events, (os.environ['OUTLOOK_ICS_URLS'], now)))
+    for name, fetch, args in sources:
         try:
             events.extend(fetch(*args)); loaded += 1
         except (ValueError, KeyError, TypeError, OSError, urllib.error.URLError) as error:
@@ -288,7 +293,7 @@ def agenda_data(now):
             # Exception text can contain a private feed URL; emit safe categories only.
             category = ('HTTP ' + str(error.code) if isinstance(error, urllib.error.HTTPError)
                         else type(error).__name__)
-            print('Calendar source unavailable:', fetch.__name__, category)
+            print('Calendar source unavailable:', name, category)
     result = merge_events(events)
     if failures:
         status = 'SOME CALENDARS UNAVAILABLE' if loaded else 'CALENDAR UNAVAILABLE'
